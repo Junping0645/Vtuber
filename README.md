@@ -38,8 +38,12 @@ curl -X POST http://127.0.0.1:8000/chat \
 
 학습 데이터(`dataset_answer_*.jsonl`, `train/val.jsonl`)와 비밀 값(`.env`, `api_key.txt`)은
 저장소에 포함하지 않습니다. 데이터는 `generate_dataset_batch.py`로 재생성할 수 있습니다.
+생성은 OPENAI API로 10000문장 생성했습니다.
 
 ## 요구 환경
 
 - NVIDIA GPU (VRAM 6GB+ — 4bit 추론 시 약 2.4GB 사용)
 - Python 3.10, CUDA 지원 PyTorch
+
+
+Supported by Claude Code
