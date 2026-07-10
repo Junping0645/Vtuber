@@ -1,14 +1,22 @@
 """말동무 챗봇 데모 (one-shot) — 입력 한 번 받아 답변 한 번 출력하고 종료한다.
 
-실행:
-    PYTHONUTF8=1 python demo.py
-    PYTHONUTF8=1 python demo.py "요즘 잠이 안 와요"     # 인자로 바로 질문
+실행 (PowerShell / cmd / bash 어디서든):
+    python demo.py
+    python demo.py "요즘 잠이 안 와요"     # 인자로 바로 질문
 
 중간점검용. 이 모델은 단발(single-turn)로 학습되어 입력을 독립적으로 처리한다.
 """
 import sys
 import time
 from pathlib import Path
+
+# 윈도우 콘솔(cp949)에서 한글이 깨지지 않도록 스스로 UTF-8로 맞춘다.
+# (PYTHONUTF8=1 을 매번 붙이지 않아도 되게 하려는 것)
+for _stream in (sys.stdin, sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass  # 파이프로 연결된 경우 등은 무시
 
 import torch
 from peft import PeftModel

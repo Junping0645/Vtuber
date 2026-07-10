@@ -24,8 +24,9 @@ vtuber/
 
 | 파일 | 설명 |
 |---|---|
-| `scripts/generate_dataset_batch.py` | 대화 데이터셋 생성기 (OpenAI API, 중복방지·resume) |
-| `scripts/generate_multiturn_sample.py` | 멀티턴 대화 샘플 생성기 |
+| `scripts/generate_dataset_batch.py` | 단발 대화 데이터셋 생성기 (OpenAI API, 중복방지·resume) |
+| `scripts/generate_multiturn.py` | **멀티턴 대화 생성기** (턴 교대 검증·중복방지·resume) |
+| `scripts/generate_multiturn_sample.py` | 멀티턴 샘플 10편 생성기 (형식 안내용) |
 | `scripts/prepare_dataset.py` | 데이터 병합 + train/val 분할 |
 | `train_qlora.py` | QLoRA 파인튜닝 (4bit, bitsandbytes + peft) |
 | `serve_api_secured.py` | **API 키 인증** 붙은 추론 서버 |
@@ -41,8 +42,8 @@ python -m venv .venv
 .venv\Scripts\activate            # Windows
 pip install -r requirements.txt
 
-# 2) 한 번만 대화해보기 (중간점검)
-PYTHONUTF8=1 python demo.py "요즘 잠이 안 와요"
+# 2) 한 번만 대화해보기 (중간점검) — 답변 1회 출력 후 종료
+python demo.py "요즘 잠이 안 와요"
 
 # 3) API 서버 실행 (최초 실행 시 베이스 모델 ~8GB 다운로드)
 PYTHONUTF8=1 python serve_api_secured.py
@@ -58,11 +59,20 @@ curl -X POST http://127.0.0.1:8000/chat \
 ### 데이터셋 재생성 / 학습
 
 ```bash
-PYTHONUTF8=1 python scripts/generate_dataset_batch.py --out dataset_answer_01.jsonl --total 1000
-PYTHONUTF8=1 python scripts/prepare_dataset.py     # dataset/train.jsonl, val.jsonl 생성
-PYTHONUTF8=1 python train_qlora.py                 # models/qlora-out 에 저장
+# 단발 대화 (utterance_1 / utterance_2)
+python scripts/generate_dataset_batch.py --out dataset_answer_01.jsonl --total 1000
+
+# 멀티턴 대화 (turns 배열) — 호출당 1편씩 생성하므로 500편에 10~15분
+python scripts/generate_multiturn.py --out dataset_multiturn_01.jsonl --total 500
+
+python scripts/prepare_dataset.py     # dataset/train.jsonl, val.jsonl 생성
+python train_qlora.py                 # models/qlora-out 에 저장
 ```
 데이터 생성에는 루트의 `.env`에 `OPENAI_API_KEY`가 필요합니다.
+
+> Windows PowerShell에서는 `PYTHONUTF8=1 python ...` 같은 bash식 환경변수 접두사를 쓸 수 없습니다.
+> `demo.py`와 `generate_multiturn.py`는 스스로 UTF-8을 설정하므로 그냥 실행하면 됩니다.
+> 다른 스크립트에서 한글이 깨지면 `$env:PYTHONUTF8=1` 을 먼저 실행하세요.
 
 ## 데이터셋 안내
 
