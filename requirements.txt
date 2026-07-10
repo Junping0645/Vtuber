@@ -1,0 +1,32 @@
+# 말동무 챗봇 — 의존성
+#
+# 설치:
+#   python -m venv .venv
+#   .venv\Scripts\activate          (Windows)
+#   pip install -r requirements.txt
+#
+# 주의 1) torch는 CUDA 12.8 빌드가 필요하다. 아래 --extra-index-url 없이 설치하면
+#         CPU 전용이 깔려 GPU(4bit QLoRA)가 동작하지 않는다.
+# 주의 2) torchvision은 설치하지 말 것. transformers가 이를 import 하다가
+#         버전 불일치로 "operator torchvision::nms does not exist" 오류를 낸다.
+
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.11.0+cu128
+
+# 모델 / 학습
+transformers==5.13.0
+peft==0.19.1
+bitsandbytes==0.49.2
+accelerate==1.14.0
+datasets>=3.0.0
+safetensors==0.8.0
+sentencepiece==0.2.1
+
+# 추론 API 서버
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.10.1
+
+# 데이터셋 생성 (OpenAI API)
+openai==2.41.0
+python-dotenv==1.0.1

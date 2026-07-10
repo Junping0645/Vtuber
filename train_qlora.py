@@ -11,6 +11,7 @@
     - weight_decay 적용
 """
 import argparse
+from pathlib import Path
 
 import torch
 from datasets import load_dataset
@@ -25,15 +26,20 @@ from transformers import (
     TrainingArguments,
 )
 
+HERE = Path(__file__).parent
+DATA_DIR = HERE / "dataset"
 BASE_MODEL = "EleutherAI/polyglot-ko-3.8b"
-OUTPUT_DIR = "qlora-out"
+OUTPUT_DIR = str(HERE / "models" / "qlora-out")
 MAX_LENGTH = 256  # 데이터가 짧아서(prompt+response 합쳐 대부분 150토큰 미만) 충분함
 
 
 def build_tokenized_dataset(tokenizer):
     ds = load_dataset(
         "json",
-        data_files={"train": "train.jsonl", "validation": "val.jsonl"},
+        data_files={
+            "train": str(DATA_DIR / "train.jsonl"),
+            "validation": str(DATA_DIR / "val.jsonl"),
+        },
     )
 
     def tokenize(example):

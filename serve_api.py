@@ -8,14 +8,17 @@
     curl -X POST http://127.0.0.1:8000/chat -H "Content-Type: application/json" ^
          -d "{\"message\": \"오늘 날씨가 참 좋네요\"}"
 """
+from pathlib import Path
+
 import torch
 from fastapi import FastAPI
 from peft import PeftModel
 from pydantic import BaseModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
+HERE = Path(__file__).parent
 BASE_MODEL = "EleutherAI/polyglot-ko-3.8b"
-ADAPTER_DIR = "qlora-out/final_adapter"
+ADAPTER_DIR = str(HERE / "models" / "qlora-out" / "final_adapter")
 PROMPT_TEMPLATE = "### 어르신: {message}\n### 말동무:"
 
 app = FastAPI(title="말동무 챗봇 API")

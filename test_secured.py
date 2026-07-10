@@ -74,8 +74,8 @@ def main():
 
     text = "\n".join(out)
     print(text)
-    (Path(__file__).parent / "secured_test_results.txt").write_text(text, encoding="utf-8")
-    print("\n결과 저장 → secured_test_results.txt")
+    (Path(__file__).parent / "logs" / "secured_test_results.txt").write_text(text, encoding="utf-8")
+    print("\n결과 저장 → logs/secured_test_results.txt")
 
 
 if __name__ == "__main__":

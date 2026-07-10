@@ -1,36 +1,37 @@
 """
-말동무 대화 데이터 1,000쌍 생성기 (OpenAI API)
+말동무 대화 데이터 배치 생성기 (분할 파일용)
 ------------------------------------------------
-- data_find.py 기반. 목표를 1,000개로 축소하고 .env를 자동 로드한다.
-- 출력: dataset_answer_01.jsonl  (JSONL 한 줄 = 대화 쌍 1개)
-  {"id","category","utterance_1","utterance_2","emotion"}
-- 중간에 끊겨도 다시 실행하면 이어서 채운다(resume).
+generate_dataset_1000.py를 일반화한 버전.
+- 목표 개수와 출력 파일명을 인자로 받는다.
+- 폴더 안 모든 dataset_answer_*.jsonl을 읽어 (1) 발화 중복을 막고 (2) id를 전역 연속으로 유지.
+- 지정한 OUT 파일에만 append 하며, 끊겨도 다시 실행하면 이어서 채운다.
 
-  python generate_dataset_1000.py
+  python scripts/generate_dataset_batch.py --out dataset_answer_02.jsonl --total 134
+  (출력은 dataset/ 폴더에 저장된다)
 """
-import os, re, json, time
+import os, re, json, time, glob, math, argparse
 from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).parent / ".env")   # OPENAI_API_KEY 로드
+ROOT = Path(__file__).resolve().parents[1]   # 프로젝트 루트
+DATA_DIR = ROOT / "dataset"
+load_dotenv(ROOT / ".env")
 from openai import OpenAI
 
 client = OpenAI()
 
 MODEL = "gpt-4o-mini"
-OUT = str(Path(__file__).parent / "dataset_answer_01.jsonl")
 BATCH_SIZE = 15
 TEMPERATURE = 1.0
 EMOTIONS = ["neutral", "happy", "caring", "sad", "worried", "surprised", "playful", "thoughtful"]
 
-# 목표 총 1,000개 (원본 1만 개 배분을 1/10로 축소, 합계 = 1000)
-CATEGORIES = {
+# 카테고리 가중치(원본 1만 배분). 목표 total을 이 비율대로 나눠 배분한다.
+WEIGHTS = {
     "인사/안부": 50, "건강/통증": 90, "수면·약·병원": 70, "식사/입맛": 70,
     "손주": 60, "자식·며느리": 60, "외로움": 90, "회상·고향": 60,
     "날씨·계절": 50, "일상(TV·화초·산책)": 70, "걱정·불안": 80, "소소한 기쁨": 60,
     "시장·동네": 50, "상실·슬픔": 50, "명절·행사": 40, "끼니·마무리": 50,
 }
-TARGET_TOTAL = sum(CATEGORIES.values())
 
 SYSTEM = (
     "너는 한국어 대화 데이터셋 생성기다. 독거 어르신을 위한 AI 말동무 학습용 대화 쌍을 만든다.\n"
@@ -44,6 +45,18 @@ SYSTEM = (
     "- 반드시 아래 JSON 객체 하나만 출력한다. 설명·마크다운·주석 금지:\n"
     '{"data":[{"utterance_1":"...","utterance_2":"...","emotion":"..."}]}'
 )
+
+
+def distribute(total):
+    """total개를 WEIGHTS 비율대로 정수 배분(최대잉여법)해서 dict 반환."""
+    wsum = sum(WEIGHTS.values())
+    raw = {k: total * w / wsum for k, w in WEIGHTS.items()}
+    base = {k: int(math.floor(v)) for k, v in raw.items()}
+    remainder = total - sum(base.values())
+    # 소수부가 큰 순으로 1개씩 더 배분
+    for k in sorted(WEIGHTS, key=lambda k: raw[k] - base[k], reverse=True)[:remainder]:
+        base[k] += 1
+    return base
 
 
 def build_user_prompt(category, n):
@@ -60,8 +73,7 @@ def call_api(category, n, retries=5):
     for attempt in range(retries):
         try:
             resp = client.chat.completions.create(
-                model=MODEL,
-                temperature=TEMPERATURE,
+                model=MODEL, temperature=TEMPERATURE,
                 response_format={"type": "json_object"},
                 messages=[
                     {"role": "system", "content": SYSTEM},
@@ -77,11 +89,18 @@ def call_api(category, n, retries=5):
     return []
 
 
-def load_existing():
-    """이어하기: 기존 파일에서 중복 방지용 set과 카테고리별 개수 복원."""
-    seen, counts, max_id = set(), {}, 0
-    if os.path.exists(OUT):
-        with open(OUT, encoding="utf-8") as f:
+def load_global_state(out_path):
+    """
+    폴더 내 모든 dataset_answer_*.jsonl을 읽어:
+      - seen: 전체 발화 중복 방지용 set
+      - out_counts: OUT 파일의 카테고리별 기존 개수(이어하기용)
+      - max_id: 전역 최대 id
+    """
+    seen, out_counts, max_id = set(), {}, 0
+    out_name = os.path.basename(out_path)
+    for fp in glob.glob(str(HERE / "dataset_answer_*.jsonl")):
+        is_out = os.path.basename(fp) == out_name
+        with open(fp, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -91,19 +110,27 @@ def load_existing():
                 except json.JSONDecodeError:
                     continue
                 seen.add(norm(r.get("utterance_1")))
-                counts[r["category"]] = counts.get(r["category"], 0) + 1
                 max_id = max(max_id, r.get("id", 0))
-    return seen, counts, max_id
+                if is_out:
+                    out_counts[r["category"]] = out_counts.get(r["category"], 0) + 1
+    return seen, out_counts, max_id
 
 
 def main():
-    seen, counts, max_id = load_existing()
-    next_id = max_id + 1
-    if seen:
-        print(f"이어하기: 기존 {len(seen)}개 발견. 이어서 채웁니다.")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", required=True, help="출력 파일명 (예: dataset_answer_02.jsonl)")
+    ap.add_argument("--total", type=int, required=True, help="이 파일의 목표 개수")
+    args = ap.parse_args()
 
-    with open(OUT, "a", encoding="utf-8") as fout:
-        for category, target in CATEGORIES.items():
+    out_path = str(HERE / args.out)
+    targets = distribute(args.total)
+    seen, counts, max_id = load_global_state(out_path)
+    next_id = max_id + 1
+
+    print(f"→ {args.out}: 목표 {args.total}개 | 전역 기존 {len(seen)}개(중복방지) | 시작 id {next_id}")
+
+    with open(out_path, "a", encoding="utf-8") as fout:
+        for category, target in targets.items():
             have = counts.get(category, 0)
             while have < target:
                 need = min(BATCH_SIZE, target - have)
@@ -130,13 +157,13 @@ def main():
                     added += 1
                     if have >= target:
                         break
-                print(f"[{category}] {have}/{target} (+{added})  |  전체 {next_id-1}/{TARGET_TOTAL}")
+                print(f"[{category}] {have}/{target} (+{added})")
                 if added == 0:
-                    print("  ↳ 새로 추가 없음(중복 과다). 다음 카테고리로 넘어감.")
+                    print("  ↳ 새로 추가 없음(중복 과다). 다음 카테고리로.")
                     break
                 time.sleep(0.5)
 
-    print(f"\n완료 → {OUT}  (총 {next_id-1}개)")
+    print(f"완료 → {args.out} (이 파일 {sum(targets.values())}개 목표 / 마지막 id {next_id-1})\n")
 
 
 if __name__ == "__main__":

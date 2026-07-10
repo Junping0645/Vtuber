@@ -1,36 +1,35 @@
 """
-말동무 대화 데이터 대량 생성기 (OpenAI API)
+말동무 대화 데이터 1,000쌍 생성기 (OpenAI API)
 ------------------------------------------------
-- 노인(utterance_1) → AI 말동무(utterance_2) 쌍을 카테고리별로 생성
-- 출력 형식(JSONL 한 줄): {"id","category","utterance_1","utterance_2","emotion"}
-- 특징: 카테고리 균형 / 중복 제거 / 재시도(백오프) / 이어하기(resume)
+- data_find.py 기반. 목표를 1,000개로 축소하고 .env를 자동 로드한다.
+- 출력: dataset_answer_01.jsonl  (JSONL 한 줄 = 대화 쌍 1개)
+  {"id","category","utterance_1","utterance_2","emotion"}
+- 중간에 끊겨도 다시 실행하면 이어서 채운다(resume).
 
-[사용법]
-  pip install openai
-  export OPENAI_API_KEY="sk-..."      # (윈도우: set OPENAI_API_KEY=...)
-  python generate_dataset.py
-  * 중간에 끊겨도 다시 실행하면 이어서 채움.
-
-[비용] gpt-4o-mini는 매우 저렴. 1만 개(짧은 쌍) 생성이면 대략 몇 달러 안쪽.
-       정확한 단가는 현재 OpenAI 요금표를 확인할 것.
+  python generate_dataset_1000.py
 """
 import os, re, json, time
+from pathlib import Path
+from dotenv import load_dotenv
+
+ROOT = Path(__file__).resolve().parents[1]   # 프로젝트 루트
+load_dotenv(ROOT / ".env")   # OPENAI_API_KEY 로드
 from openai import OpenAI
 
-client = OpenAI()  # OPENAI_API_KEY 환경변수 자동 사용
+client = OpenAI()
 
-MODEL = "gpt-4o-mini"          # 저렴. 품질 더 원하면 상위 모델로 교체
-OUT = "maldongmu_generated.jsonl"
-BATCH_SIZE = 15                # 한 번 호출에 생성할 쌍 수 (품질/비용 균형)
-TEMPERATURE = 1.0             # 다양성 확보
-EMOTIONS = ["neutral","happy","caring","sad","worried","surprised","playful","thoughtful"]
+MODEL = "gpt-4o-mini"
+OUT = str(ROOT / "dataset" / "dataset_answer_01.jsonl")
+BATCH_SIZE = 15
+TEMPERATURE = 1.0
+EMOTIONS = ["neutral", "happy", "caring", "sad", "worried", "surprised", "playful", "thoughtful"]
 
-# 카테고리별 목표 개수 (합계가 전체 목표). 편향 방지를 위해 고르게 배분.
+# 목표 총 1,000개 (원본 1만 개 배분을 1/10로 축소, 합계 = 1000)
 CATEGORIES = {
-    "인사/안부": 500, "건강/통증": 900, "수면·약·병원": 700, "식사/입맛": 700,
-    "손주": 600, "자식·며느리": 600, "외로움": 900, "회상·고향": 600,
-    "날씨·계절": 500, "일상(TV·화초·산책)": 700, "걱정·불안": 800, "소소한 기쁨": 600,
-    "시장·동네": 500, "상실·슬픔": 500, "명절·행사": 400, "끼니·마무리": 500,
+    "인사/안부": 50, "건강/통증": 90, "수면·약·병원": 70, "식사/입맛": 70,
+    "손주": 60, "자식·며느리": 60, "외로움": 90, "회상·고향": 60,
+    "날씨·계절": 50, "일상(TV·화초·산책)": 70, "걱정·불안": 80, "소소한 기쁨": 60,
+    "시장·동네": 50, "상실·슬픔": 50, "명절·행사": 40, "끼니·마무리": 50,
 }
 TARGET_TOTAL = sum(CATEGORIES.values())
 
@@ -47,13 +46,16 @@ SYSTEM = (
     '{"data":[{"utterance_1":"...","utterance_2":"...","emotion":"..."}]}'
 )
 
+
 def build_user_prompt(category, n):
     return (f'카테고리는 "{category}"이다. 이 주제로 서로 겹치지 않는 대화 쌍 {n}개를 생성하라. '
             '어르신의 지역·성별·성격·기분을 골고루 섞어라. '
             'JSON 객체 형식으로만 출력하라.')
 
+
 def norm(s):
     return re.sub(r"\s+", "", s or "")
+
 
 def call_api(category, n, retries=5):
     for attempt in range(retries):
@@ -75,6 +77,7 @@ def call_api(category, n, retries=5):
             time.sleep(wait)
     return []
 
+
 def load_existing():
     """이어하기: 기존 파일에서 중복 방지용 set과 카테고리별 개수 복원."""
     seen, counts, max_id = set(), {}, 0
@@ -92,6 +95,7 @@ def load_existing():
                 counts[r["category"]] = counts.get(r["category"], 0) + 1
                 max_id = max(max_id, r.get("id", 0))
     return seen, counts, max_id
+
 
 def main():
     seen, counts, max_id = load_existing()
@@ -115,7 +119,7 @@ def main():
                     if emo not in EMOTIONS:
                         emo = "neutral"
                     key = norm(u1)
-                    if key in seen:      # 중복 스킵
+                    if key in seen:
                         continue
                     seen.add(key)
                     row = {"id": next_id, "category": category,
@@ -128,13 +132,13 @@ def main():
                     if have >= target:
                         break
                 print(f"[{category}] {have}/{target} (+{added})  |  전체 {next_id-1}/{TARGET_TOTAL}")
-                # 중복이 심해 더 안 늘면 다음 카테고리로 (무한루프 방지)
                 if added == 0:
                     print("  ↳ 새로 추가 없음(중복 과다). 다음 카테고리로 넘어감.")
                     break
-                time.sleep(0.5)   # 레이트리밋 여유
+                time.sleep(0.5)
 
     print(f"\n완료 → {OUT}  (총 {next_id-1}개)")
+
 
 if __name__ == "__main__":
     main()

@@ -4,15 +4,13 @@ __pycache__/
 *.pyc
 
 # 비밀 값 (절대 커밋 금지)
-# secured_test_results.txt 에는 발급된 API 키가 들어있어 제외
+# logs/secured_test_results.txt 에는 발급된 API 키가 들어있어 제외
 .env
 api_key.txt
-secured_test_results.txt
+logs/secured_test_results.txt
 
 # 데이터셋 (용량/저작 이슈로 제외)
-dataset_answer_*.jsonl
-train.jsonl
-val.jsonl
+dataset/*.jsonl
 
 # 학습 중간 체크포인트 (용량 큼, 최종 어댑터만 유지)
-qlora-out/checkpoint-*/
+models/qlora-out/checkpoint-*/

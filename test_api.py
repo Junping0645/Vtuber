@@ -1,7 +1,9 @@
 import json
 import time
 import urllib.request
+from pathlib import Path
 
+HERE = Path(__file__).parent
 QUESTIONS = [
     "요즘 많이 외롭습니다.",
     "오늘 날씨가 참 좋네요.",
@@ -25,7 +27,7 @@ for q in QUESTIONS:
     elapsed = time.time() - t0
     results.append(f"Q: {q}\nA: {data['response']}\nlatency: {elapsed:.2f}s\n---")
 
-with open("chat_test_results.txt", "w", encoding="utf-8") as f:
+with open(HERE / "logs" / "chat_test_results.txt", "w", encoding="utf-8") as f:
     f.write("\n".join(results) + "\n")
 
 print("done")
