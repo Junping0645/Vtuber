@@ -191,9 +191,12 @@ def main():
 
     print(f"→ {args.out}: 목표 {args.total}편 | 기존 {len(seen)}편(중복방지) | 시작 id {next_id}")
 
+    MAX_FAIL_STREAK = 8  # 연속 실패가 이만큼 쌓여야 카테고리를 포기한다 (단발 실패로 조기 중단 방지)
+
     with open(out_path, "a", encoding="utf-8") as fout:
         for category, target in targets.items():
             have = counts.get(category, 0)
+            fail_streak = 0
             while have < target:
                 need = min(CONVS_PER_CALL, target - have)
                 added = 0
@@ -216,8 +219,12 @@ def main():
                         break
                 print(f"[{category}] {have}/{target} (+{added})")
                 if added == 0:
-                    print("  ↳ 새로 추가 없음(중복/형식오류 과다). 다음 카테고리로.")
-                    break
+                    fail_streak += 1
+                    if fail_streak >= MAX_FAIL_STREAK:
+                        print(f"  ↳ 연속 {MAX_FAIL_STREAK}회 추가 없음(중복/형식오류 과다). 다음 카테고리로.")
+                        break
+                else:
+                    fail_streak = 0
                 time.sleep(0.5)
 
     print(f"\n완료 → dataset/{args.out} (마지막 id {next_id - 1})")

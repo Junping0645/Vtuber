@@ -1,10 +1,11 @@
-"""말동무 챗봇 데모 (one-shot) — 입력 한 번 받아 답변 한 번 출력하고 종료한다.
+"""말동무 챗봇 데모 — 인자 없이 실행하면 대화 이력을 유지하며 계속 주고받는다.
 
 실행 (PowerShell / cmd / bash 어디서든):
-    python demo.py
-    python demo.py "요즘 잠이 안 와요"     # 인자로 바로 질문
+    python demo.py                      # 대화형(멀티턴), 빈 입력이면 종료
+    python demo.py "요즘 잠이 안 와요"   # 인자로 주면 단발 질문 1개만 하고 종료
 
-중간점검용. 이 모델은 단발(single-turn)로 학습되어 입력을 독립적으로 처리한다.
+중간점검용. serve_api_secured.py를 켜지 않고도 로컬에서 바로 모델을 호출해 테스트할 수 있다.
+대화 이력 이어붙이는 방식은 serve_api_secured.py의 build_prompt와 동일하다.
 """
 import sys
 import time
@@ -25,7 +26,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 HERE = Path(__file__).parent
 BASE_MODEL = "EleutherAI/polyglot-ko-3.8b"
 ADAPTER_DIR = str(HERE / "models" / "qlora-out" / "final_adapter")
-PROMPT_TEMPLATE = "### 어르신: {message}\n### 말동무:"
 
 
 def load():
@@ -57,9 +57,21 @@ def clean(text):
     return text.strip()
 
 
+def build_prompt(history, message):
+    """serve_api_secured.py의 build_prompt와 동일한 포맷으로 대화 이력을 이어붙인다."""
+    text = ""
+    for role, turn_text in history:
+        if role == "user":
+            text += f"### 어르신: {turn_text}\n### 말동무:"
+        else:
+            text += f" {turn_text}\n"
+    text += f"### 어르신: {message}\n### 말동무:"
+    return text
+
+
 @torch.no_grad()
-def reply(tokenizer, model, message, max_new_tokens=80, temperature=0.8):
-    prompt = PROMPT_TEMPLATE.format(message=message)
+def reply(tokenizer, model, history, message, max_new_tokens=80, temperature=0.8):
+    prompt = build_prompt(history, message)
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
     out = model.generate(
         **inputs,
@@ -77,28 +89,39 @@ def reply(tokenizer, model, message, max_new_tokens=80, temperature=0.8):
 
 
 def main():
-    # 인자로 질문을 주면 그걸 쓰고, 없으면 한 번만 입력받는다.
+    # 인자로 질문을 주면 단발 1회만 하고 종료. 인자가 없으면 대화형(멀티턴)으로 계속 이어간다.
     if len(sys.argv) > 1:
         message = " ".join(sys.argv[1:]).strip()
-    else:
-        try:
-            message = input("어르신 > ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print("\n입력이 없어 종료합니다.")
+        if not message:
+            print("입력이 비어 있어 종료합니다.")
             return
-
-    if not message:
-        print("입력이 비어 있어 종료합니다.")
+        tokenizer, model = load()
+        t0 = time.time()
+        answer = reply(tokenizer, model, [], message)
+        print(f"어르신 > {message}")
+        print(f"말동무 > {answer}")
+        print(f"        ({time.time() - t0:.2f}s)")
         return
 
     tokenizer, model = load()
+    print("대화형 모드입니다. 빈 입력을 누르면 종료합니다.\n")
+    history = []
+    while True:
+        try:
+            message = input("어르신 > ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n종료합니다.")
+            return
+        if not message:
+            print("종료합니다.")
+            return
 
-    t0 = time.time()
-    answer = reply(tokenizer, model, message)
-    print(f"어르신 > {message}")
-    print(f"말동무 > {answer}")
-    print(f"        ({time.time() - t0:.2f}s)")
-    # 답변을 출력했으므로 여기서 프로그램 종료
+        t0 = time.time()
+        answer = reply(tokenizer, model, history, message)
+        print(f"말동무 > {answer}")
+        print(f"        ({time.time() - t0:.2f}s)")
+        history.append(("user", message))
+        history.append(("assistant", answer))
 
 
 if __name__ == "__main__":

@@ -30,7 +30,7 @@ HERE = Path(__file__).parent
 DATA_DIR = HERE / "dataset"
 BASE_MODEL = "EleutherAI/polyglot-ko-3.8b"
 OUTPUT_DIR = str(HERE / "models" / "qlora-out")
-MAX_LENGTH = 256  # 데이터가 짧아서(prompt+response 합쳐 대부분 150토큰 미만) 충분함
+MAX_LENGTH = 768  # 멀티턴 대화(대화당 최대 534자, 최대 8턴) 포함하려면 256으론 부족해서 상향
 
 
 def build_tokenized_dataset(tokenizer):
@@ -141,6 +141,8 @@ def main():
     )
 
     trainer.train()
+
+    print(f"peak_mem_gb={torch.cuda.max_memory_allocated()/1e9:.2f}")
 
     model.save_pretrained(f"{OUTPUT_DIR}/final_adapter")
     tokenizer.save_pretrained(f"{OUTPUT_DIR}/final_adapter")

@@ -25,7 +25,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 HERE = Path(__file__).parent
 BASE_MODEL = "EleutherAI/polyglot-ko-3.8b"
 ADAPTER_DIR = str(HERE / "models" / "qlora-out" / "final_adapter")
-PROMPT_TEMPLATE = "### 어르신: {message}\n### 말동무:"
 KEY_FILE = HERE / "api_key.txt"
 
 
@@ -48,14 +47,33 @@ tokenizer = None
 model = None
 
 
+class Turn(BaseModel):
+    role: str  # "user"(어르신) 또는 "assistant"(말동무)
+    text: str
+
+
 class ChatRequest(BaseModel):
     message: str
+    history: list[Turn] = []  # 이전 대화 턴들(과거→현재 순). 비우면 단발 대화와 동일하게 동작.
     max_new_tokens: int = 80
     temperature: float = 0.8
 
 
 class ChatResponse(BaseModel):
     response: str
+
+
+def build_prompt(history: list[Turn], message: str) -> str:
+    """학습 시 사용한 것과 동일한 방식으로 대화 이력을 이어 붙인다
+    (scripts/prepare_dataset.py의 expand_multiturn과 동일 포맷)."""
+    text = ""
+    for t in history:
+        if t.role == "user":
+            text += f"### 어르신: {t.text}\n### 말동무:"
+        else:
+            text += f" {t.text}\n"
+    text += f"### 어르신: {message}\n### 말동무:"
+    return text
 
 
 def require_api_key(
@@ -97,7 +115,7 @@ def health():
 
 @app.post("/chat", response_model=ChatResponse, dependencies=[Depends(require_api_key)])
 def chat(req: ChatRequest):
-    prompt = PROMPT_TEMPLATE.format(message=req.message)
+    prompt = build_prompt(req.history, req.message)
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
     with torch.no_grad():
         output_ids = model.generate(

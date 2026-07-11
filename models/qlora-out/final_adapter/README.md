@@ -2,206 +2,77 @@
 base_model: EleutherAI/polyglot-ko-3.8b
 library_name: peft
 pipeline_tag: text-generation
+language:
+- ko
 tags:
 - base_model:adapter:EleutherAI/polyglot-ko-3.8b
 - lora
 - transformers
+- korean
+- chatbot
 ---
 
-# Model Card for Model ID
-
-<!-- Provide a quick summary of what the model is/does. -->
-
-
-
-## Model Details
-
-### Model Description
-
-<!-- Provide a longer summary of what this model is. -->
-
-
-
-- **Developed by:** [More Information Needed]
-- **Funded by [optional]:** [More Information Needed]
-- **Shared by [optional]:** [More Information Needed]
-- **Model type:** [More Information Needed]
-- **Language(s) (NLP):** [More Information Needed]
-- **License:** [More Information Needed]
-- **Finetuned from model [optional]:** [More Information Needed]
-
-### Model Sources [optional]
-
-<!-- Provide the basic links for the model. -->
-
-- **Repository:** [More Information Needed]
-- **Paper [optional]:** [More Information Needed]
-- **Demo [optional]:** [More Information Needed]
-
-## Uses
-
-<!-- Address questions around how the model is intended to be used, including the foreseeable users of the model and those affected by the model. -->
-
-### Direct Use
-
-<!-- This section is for the model use without fine-tuning or plugging into a larger ecosystem/app. -->
-
-[More Information Needed]
-
-### Downstream Use [optional]
-
-<!-- This section is for the model use when fine-tuned for a task, or when plugged into a larger ecosystem/app -->
-
-[More Information Needed]
-
-### Out-of-Scope Use
-
-<!-- This section addresses misuse, malicious use, and uses that the model will not work well for. -->
-
-[More Information Needed]
-
-## Bias, Risks, and Limitations
-
-<!-- This section is meant to convey both technical and sociotechnical limitations. -->
-
-[More Information Needed]
-
-### Recommendations
-
-<!-- This section is meant to convey recommendations with respect to the bias, risk, and technical limitations. -->
-
-Users (both direct and downstream) should be made aware of the risks, biases and limitations of the model. More information needed for further recommendations.
-
-## How to Get Started with the Model
-
-Use the code below to get started with the model.
-
-[More Information Needed]
-
-## Training Details
-
-### Training Data
-
-<!-- This should link to a Dataset Card, perhaps with a short stub of information on what the training data is all about as well as documentation related to data pre-processing or additional filtering. -->
-
-[More Information Needed]
-
-### Training Procedure
-
-<!-- This relates heavily to the Technical Specifications. Content here should link to that section when it is relevant to the training procedure. -->
-
-#### Preprocessing [optional]
-
-[More Information Needed]
-
-
-#### Training Hyperparameters
-
-- **Training regime:** [More Information Needed] <!--fp32, fp16 mixed precision, bf16 mixed precision, bf16 non-mixed precision, fp16 non-mixed precision, fp8 mixed precision -->
-
-#### Speeds, Sizes, Times [optional]
-
-<!-- This section provides information about throughput, start/end time, checkpoint size if relevant, etc. -->
-
-[More Information Needed]
-
-## Evaluation
-
-<!-- This section describes the evaluation protocols and provides the results. -->
-
-### Testing Data, Factors & Metrics
-
-#### Testing Data
-
-<!-- This should link to a Dataset Card if possible. -->
-
-[More Information Needed]
-
-#### Factors
-
-<!-- These are the things the evaluation is disaggregating by, e.g., subpopulations or domains. -->
-
-[More Information Needed]
-
-#### Metrics
-
-<!-- These are the evaluation metrics being used, ideally with a description of why. -->
-
-[More Information Needed]
-
-### Results
-
-[More Information Needed]
-
-#### Summary
-
-
-
-## Model Examination [optional]
-
-<!-- Relevant interpretability work for the model goes here -->
-
-[More Information Needed]
-
-## Environmental Impact
-
-<!-- Total emissions (in grams of CO2eq) and additional considerations, such as electricity usage, go here. Edit the suggested text below accordingly -->
-
-Carbon emissions can be estimated using the [Machine Learning Impact calculator](https://mlco2.github.io/impact#compute) presented in [Lacoste et al. (2019)](https://arxiv.org/abs/1910.09700).
-
-- **Hardware Type:** [More Information Needed]
-- **Hours used:** [More Information Needed]
-- **Cloud Provider:** [More Information Needed]
-- **Compute Region:** [More Information Needed]
-- **Carbon Emitted:** [More Information Needed]
-
-## Technical Specifications [optional]
-
-### Model Architecture and Objective
-
-[More Information Needed]
-
-### Compute Infrastructure
-
-[More Information Needed]
-
-#### Hardware
-
-[More Information Needed]
-
-#### Software
-
-[More Information Needed]
-
-## Citation [optional]
-
-<!-- If there is a paper or blog post introducing the model, the APA and Bibtex information for that should go in this section. -->
-
-**BibTeX:**
-
-[More Information Needed]
-
-**APA:**
-
-[More Information Needed]
-
-## Glossary [optional]
-
-<!-- If relevant, include terms and calculations in this section that can help readers understand the model or model card. -->
-
-[More Information Needed]
-
-## More Information [optional]
-
-[More Information Needed]
-
-## Model Card Authors [optional]
-
-[More Information Needed]
-
-## Model Card Contact
-
-[More Information Needed]
-### Framework versions
-
-- PEFT 0.19.1
+# 말동무 — 독거 어르신용 AI 대화 챗봇 (QLoRA 어댑터)
+
+`EleutherAI/polyglot-ko-3.8b`를 QLoRA(4bit NF4)로 파인튜닝한 LoRA 어댑터입니다.
+독거 어르신과 짧고 따뜻한 존댓말로 대화하며, 먼저 공감하고 필요시 안부를 챙기는 페르소나로 학습했습니다.
+
+## 학습 데이터
+- 단발 대화 11,266개: 16개 카테고리(건강/외로움/손주/명절 등) × 8개 감정, GPT-4o-mini로 생성 + 실제 어르신 인터뷰 전사에서 추출한 사투리/구어체 발화 1,266개(사투리 입력 이해 보강용)
+- 멀티턴 대화 1,000편(대화당 평균 7.1턴) → 턴마다 슬라이딩 윈도우로 확장해 3,546개 학습 샘플로 변환
+- 최종 train 14,072 / val 740
+
+## 학습 설정
+- LoRA: r=8, alpha=16, dropout=0.1, target_modules=["query_key_value", "dense"] (GPT-NeoX 어텐션 위주로 좁게 타깃 — 과적합 억제)
+- 4bit NF4 양자화(bitsandbytes), MAX_LENGTH=768
+- batch_size=2, gradient_accumulation_steps=8 (유효 배치 16), 5 epoch 캡 + EarlyStoppingCallback(patience=3)
+- 결과: epoch 3.296에서 early stopping, **eval_loss 1.366**, RTX 3060 Ti(8GB)에서 141.9분 소요, peak VRAM 3.4GB
+
+## 사용법
+
+베이스 모델(7.6GB)을 4bit로 로드한 뒤 이 어댑터를 얹습니다.
+
+```python
+import torch
+from peft import PeftModel
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+
+BASE_MODEL = "EleutherAI/polyglot-ko-3.8b"
+ADAPTER = "Junping0645/Vtuber"  # 이 리포
+
+tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
+bnb = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_compute_dtype=torch.float16,
+    bnb_4bit_use_double_quant=True,
+)
+base = AutoModelForCausalLM.from_pretrained(BASE_MODEL, quantization_config=bnb, device_map={"": 0})
+model = PeftModel.from_pretrained(base, ADAPTER)
+model.eval()
+
+prompt = "### 어르신: 요즘 많이 외롭습니다.\n### 말동무:"
+inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+out = model.generate(**inputs, max_new_tokens=80, do_sample=True, temperature=0.8,
+                      top_p=0.9, repetition_penalty=1.15,
+                      pad_token_id=tokenizer.eos_token_id, eos_token_id=tokenizer.eos_token_id)
+print(tokenizer.decode(out[0], skip_special_tokens=True))
+```
+
+### 멀티턴(대화 이력 유지)
+
+이전 턴들을 같은 포맷으로 이어붙이면 문맥을 반영한 답변이 나옵니다(학습 시 사용한 포맷과 동일해야 함):
+
+```
+### 어르신: 손주가 다음 주에 놀러 온대요.
+### 말동무: 정말요? 기대되시겠어요! 즐거운 시간 보내시길 바래요.
+### 어르신: 몇 살인지 안 물어보셨네요, 이번에 초등학교 들어가요.
+### 말동무: 그렇군요! 요즘 아이들은 빠르죠.
+### 어르신: 걔가 오면 뭘 해주면 좋아할까요?
+### 말동무:
+```
+
+## 참고
+- VRAM: 학습 3.4GB / 추론 약 3.3GB (RTX 3060 Ti 8GB 기준)
+- Framework: PEFT 0.19.1, transformers 5.13.0, bitsandbytes 0.49.2, torch 2.11.0+cu128
+- 개인 프로젝트용 비공개 모델입니다.
