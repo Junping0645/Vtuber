@@ -14,3 +14,6 @@ dataset/*.jsonl
 
 # 학습 중간 체크포인트 (용량 큼, 최종 어댑터만 유지)
 models/qlora-out/checkpoint-*/
+
+# 어댑터 백업 (models/qlora-out/final_adapter 와 동일본이라 저장소에는 불필요)
+models/backup/
